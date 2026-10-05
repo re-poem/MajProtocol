@@ -1,4 +1,4 @@
-# MajdataWs
+# MajdataProtocol
 
 Majdata protocol DTOs and serialization helpers.
 
