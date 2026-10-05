@@ -1,6 +1,6 @@
 # MajdataWs
 
-Majdata WebSocket wire-protocol DTOs and serialization helpers.
+Majdata protocol DTOs and serialization helpers.
 
 Extracted from
 `MajdataPlay/Assets/Scripts/Scenes/View/Types/` 

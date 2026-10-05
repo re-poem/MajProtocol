@@ -2,7 +2,7 @@ using System.Runtime.Serialization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
-namespace MajWebSocket.Types.Response
+namespace MajProtocol.Types.Response
 {
     public enum ResponseType
     {

@@ -1,14 +1,14 @@
 using System;
-using MajWebSocket.Types;
-using MajWebSocket.Types.Request;
-using MajWebSocket.Types.Response;
+using MajProtocol.Types;
+using MajProtocol.Types.Request;
+using MajProtocol.Types.Response;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 
-namespace MajWebSocket.Serialization
+namespace MajProtocol.Serialization
 {
-    public static class MajWsSerializer
+    public static class MajProtocolSerializer
     {
         public static readonly JsonSerializerSettings DefaultSettings = new()
         {

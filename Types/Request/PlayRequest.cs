@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace MajWebSocket.Types.Request
+namespace MajProtocol.Types.Request
 {
     public readonly struct PlayRequest
     {

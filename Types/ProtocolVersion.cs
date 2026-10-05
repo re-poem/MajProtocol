@@ -1,4 +1,4 @@
-namespace MajWebSocket.Types
+namespace MajProtocol.Types
 {
     public static class ProtocolVersion
     {

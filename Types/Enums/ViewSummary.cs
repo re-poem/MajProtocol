@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace MajWebSocket.Types
+namespace MajProtocol.Types.Enums
 {
     public readonly struct ViewSummary
     {

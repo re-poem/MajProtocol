@@ -1,7 +1,7 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace MajWebSocket.Types.Response
+namespace MajProtocol.Types.Response
 {
     public readonly struct ResponseEnvelope
     {

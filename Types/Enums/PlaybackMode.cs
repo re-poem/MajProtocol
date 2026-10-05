@@ -1,4 +1,4 @@
-namespace MajWebSocket.Types
+namespace MajProtocol.Types.Enums
 {
     public enum PlaybackMode
     {

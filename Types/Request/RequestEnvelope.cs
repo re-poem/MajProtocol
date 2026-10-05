@@ -1,7 +1,7 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace MajWebSocket.Types.Request
+namespace MajProtocol.Types.Request
 {
     public readonly struct RequestEnvelope
     {

@@ -2,7 +2,7 @@ using System.Runtime.Serialization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
-namespace MajWebSocket.Types.Request
+namespace MajProtocol.Types.Request
 {
     [JsonConverter(typeof(StringEnumConverter))]
     public enum RequestType
@@ -28,7 +28,10 @@ namespace MajWebSocket.Types.Request
         [EnumMember(Value = "Stop")]
         Stop = 6,
 
+        [EnumMember(Value = "Setting")]
+        Setting = 7,
+
         [EnumMember(Value = "State")]
-        State = 7,
+        State = 8,
     }
 }
