@@ -18,7 +18,7 @@ Extracted from
 // server -> client
 {
   "protocolVersion": 1,
-  "responseType": "Heartbeat",
+  "responseType": 203,
   "responseData": { "state": "Playing", "errMsg": "", "timeline": 12.34 }
 }
 ```
@@ -42,6 +42,10 @@ Extracted from
 | `Stop`   | 6    | —               | 停止播放并将服务端恢复到非播放状态。                                                  |
 | `State`  | 7    | —               | 查询当前服务端状态；服务端以 `Heartbeat` 响应作为回复。                              |
 
+| 负载类型 |     包含字段    | 说明                                 |
+|-----|-----------------|----------------------------------------------------------------------------------|
+| `LoadRequest` | TrackPath, ImagePath, VideoPath | 从指定路径加载大的资源                                                                         |
+| `PlayRequest` | StartAt, SimaiFumen, Offset, Speed | 加载Fumen并从指定位置播放                                                                        |
 ### 响应（服务端 → 客户端）
 
 | 类型             | 编码 | 负载            | 说明                                                                                          |
