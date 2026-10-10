@@ -6,7 +6,8 @@ namespace MajProtocol.Types.Response
 {
     public enum ResponseType
     {
-        Error,
-        Ok,
+        Error = 0,
+        Ok = 1,
+        Event = 2,
     }
 }
