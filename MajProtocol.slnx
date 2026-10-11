@@ -1,3 +1,6 @@
 <Solution>
-  <Project Path="MajProtocol.csproj" />
+  <Project Path="MajProtocol.ExampleClient/MajProtocol.ExampleClient.csproj" />
+  <Project Path="MajProtocol.Server/MajProtocol.Server.csproj" />
+  <Project Path="MajProtocol.Standard.Generator/MajProtocol.Standard.Generator.csproj" />
+  <Project Path="MajProtocol.Standard/MajProtocol.Standard.csproj" />
 </Solution>
