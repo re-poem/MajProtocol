@@ -25,6 +25,18 @@ public class PacketGenerator : IIncrementalGenerator
             var source = GeneratePacket(packetInfo);
             spc.AddSource($"{packetInfo.Name}_Packet.g.cs", SourceText.From(source, Encoding.UTF8));
         });
+
+        var collectedPackets = packetProvider.Collect();
+
+        context.RegisterSourceOutput(collectedPackets, static (spc, packets) =>
+        {
+            spc.AddSource("IMajProtocolClient.g.cs",
+                          SourceText.From(GenerateRoutingClass("IMajProtocolClient", packets.Where(p => !p.IsServer)),
+                                          Encoding.UTF8));
+            spc.AddSource("IMajProtocolServer.g.cs",
+                          SourceText.From(GenerateRoutingClass("IMajProtocolServer", packets.Where(p => p.IsServer)),
+                                          Encoding.UTF8));
+        });
     }
 
     private static PacketInfo? GetPacketInfo(GeneratorAttributeSyntaxContext context)
@@ -35,8 +47,12 @@ public class PacketGenerator : IIncrementalGenerator
         if (typeSymbol.TypeKind != TypeKind.Struct)
             return null;
 
-        var opCodeArgument = context.Attributes[0].ConstructorArguments[0];
-        var opCode         = opCodeArgument.Value?.ToString() ?? "0";
+        var attrData       = context.Attributes[0];
+        var opCodeArgument = attrData.ConstructorArguments[0];
+        var serverArgument = attrData.ConstructorArguments[1];
+
+        var opCode   = opCodeArgument.Value?.ToString() ?? "0";
+        var isServer = (bool)(serverArgument.Value ?? false);
 
         var fields = typeSymbol.GetMembers()
                                .OfType<IFieldSymbol>()
@@ -56,6 +72,7 @@ public class PacketGenerator : IIncrementalGenerator
                 : typeSymbol.ContainingNamespace.ToDisplayString(),
             Name: typeSymbol.Name,
             OpCode: opCode,
+            IsServer: isServer,
             Fields: fields
         );
     }
@@ -67,8 +84,9 @@ public class PacketGenerator : IIncrementalGenerator
         var fieldWrites = new StringBuilder();
         var fieldReads  = new StringBuilder();
 
-        foreach (var field in info.Fields)
+        for (var i = 0; i < info.Fields.Length; i++)
         {
+            var field = info.Fields[i];
             if (field.IsString)
             {
                 stringDecls.AppendLine($"        var {field.Name}Bytes = Encoding.UTF8.GetBytes(this.{field.Name});");
@@ -79,13 +97,15 @@ public class PacketGenerator : IIncrementalGenerator
                 fieldWrites.AppendLine($"        MemoryMarshal.Write(remainingSpan, ref {field.Name}BytesLength);");
                 fieldWrites.AppendLine("        remainingSpan = remainingSpan[sizeof(int)..];");
                 fieldWrites.AppendLine($"        {field.Name}Bytes.CopyTo(remainingSpan);");
-                fieldWrites.AppendLine($"        remainingSpan = remainingSpan[{field.Name}BytesLength..];");
+                if (i < info.Fields.Length - 1)
+                    fieldWrites.AppendLine($"        remainingSpan = remainingSpan[{field.Name}BytesLength..];");
 
                 fieldReads.AppendLine($"        int {field.Name}Len = MemoryMarshal.Read<int>(remainingSpan);");
                 fieldReads.AppendLine("        remainingSpan = remainingSpan[sizeof(int)..];");
                 fieldReads.AppendLine(
                     $"        packet.{field.Name} = Encoding.UTF8.GetString(remainingSpan[..{field.Name}Len]);");
-                fieldReads.AppendLine($"        remainingSpan = remainingSpan[{field.Name}Len..];");
+                if (i < info.Fields.Length - 1)
+                    fieldReads.AppendLine($"        remainingSpan = remainingSpan[{field.Name}Len..];");
             }
             else if (field.IsUnmanaged)
             {
@@ -93,10 +113,12 @@ public class PacketGenerator : IIncrementalGenerator
 
                 fieldWrites.AppendLine($"        var {field.Name}Value = this.{field.Name};");
                 fieldWrites.AppendLine($"        MemoryMarshal.Write(remainingSpan, ref {field.Name}Value);");
-                fieldWrites.AppendLine($"        remainingSpan = remainingSpan[sizeof({field.Type})..];");
+                if (i < info.Fields.Length - 1)
+                    fieldWrites.AppendLine($"        remainingSpan = remainingSpan[sizeof({field.Type})..];");
 
                 fieldReads.AppendLine($"        packet.{field.Name} = MemoryMarshal.Read<{field.Type}>(remainingSpan);");
-                fieldReads.AppendLine($"        remainingSpan = remainingSpan[sizeof({field.Type})..];");
+                if (i < info.Fields.Length - 1)
+                    fieldReads.AppendLine($"        remainingSpan = remainingSpan[sizeof({field.Type})..];");
             }
         }
 
@@ -104,8 +126,6 @@ public class PacketGenerator : IIncrementalGenerator
 
         var namespaceLine = string.IsNullOrEmpty(info.Namespace) ? "" : $"namespace {info.Namespace};\n\n";
 
-        // Use an interpolated raw string literal for the main class structure
-        // Added 'unsafe' modifiers to allow sizeof() on any unmanaged struct
         return $$"""
                  // <auto-generated/>
                  using System;
@@ -114,6 +134,8 @@ public class PacketGenerator : IIncrementalGenerator
 
                  {{namespaceLine}}public partial struct {{info.Name}}
                  {
+                     public delegate void Callback({{info.Name}} value);
+                     
                      public static implicit operator byte[]({{info.Name}} v) => v.ToBytes();
 
                      public unsafe byte[] ToBytes()
@@ -129,10 +151,10 @@ public class PacketGenerator : IIncrementalGenerator
                          return buffer;
                      }
 
-                     public static unsafe {{info.Name}} FromBytes(byte[] data)
+                     public static unsafe {{info.Name}} FromBytes(ReadOnlySpan<byte> data)
                      {
                          var packet        = new {{info.Name}}();
-                         var remainingSpan = data.AsSpan()[1..];
+                         var remainingSpan = data[1..];
 
                  {{fieldReads}}
                          return packet;
@@ -140,8 +162,55 @@ public class PacketGenerator : IIncrementalGenerator
                  }
                  """;
     }
+
+    private static string GenerateRoutingClass(string className, IEnumerable<PacketInfo> packets)
+    {
+        var switchCases     = new StringBuilder();
+        var abstractMethods = new StringBuilder();
+
+        foreach (var packet in packets)
+        {
+            var fullName = string.IsNullOrEmpty(packet.Namespace) ? packet.Name : $"{packet.Namespace}.{packet.Name}";
+
+            switchCases.AppendLine($"            case {packet.OpCode}:");
+            switchCases.AppendLine($"                On{packet.Name}Received({fullName}.FromBytes(data));");
+            switchCases.AppendLine("                break;");
+
+            abstractMethods.AppendLine($"    void On{packet.Name}Received({fullName} req);");
+        }
+
+        return $$"""
+                 // <auto-generated/>
+                 using System;
+
+                 namespace MajProtocol.Generated;
+
+                 public interface {{className}}
+                 {
+                     public void Handle(ReadOnlySpan<byte> data)
+                     {
+                         if (data.Length < 1) return;
+                         byte opCode = data[0];
+
+                         switch (opCode)
+                         {
+                 {{switchCases}}
+                             default:
+                                 break;
+                         }
+                     }
+
+                 {{abstractMethods}}
+                 }
+                 """;
+    }
 }
 
-internal record PacketInfo(string Namespace, string Name, string OpCode, ImmutableArray<FieldInfo> Fields);
+internal record PacketInfo(
+    string                    Namespace,
+    string                    Name,
+    string                    OpCode,
+    bool                      IsServer,
+    ImmutableArray<FieldInfo> Fields);
 
 internal record FieldInfo(string Name, string Type, bool IsString, bool IsUnmanaged);
