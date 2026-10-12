@@ -4,6 +4,8 @@ namespace MajProtocol.Standard.Packets;
 public partial struct PlayRequest
 {
     public double position;
+    public bool   showIntroAnimation;
+    public string saveRecordingPath;
 }
 
 [Packet(OpCode.Play, false)]
