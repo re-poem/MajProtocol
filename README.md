@@ -1,64 +1,81 @@
-# MajProtocol
+MajProtocol
+===
 
-Majdata protocol DTOs and serialization helpers.
+MajProtocol is a binary protocol for communicating playback state between a Simai player and an editor.
 
-v1 was extracted from
-`MajdataPlay/Assets/Scripts/Scenes/View/Types/` 
+This solution is split into:
 
-## Format
+- MajProtocol.Standard: This stores the packet types and property constants.
+- MajProtocol.Server: An example implementation of a server that serves MajProtocol packets over WebSocket.
+- MajProtocol.Client: An example implementation of a client that serves MajProtocol packets over WebSocket.
 
-```jsonc
-// client -> server
-{
-  "protocolVersion": 3,
-  "requestType": "Play",
-  "requestData": { "playMode": "Normal", "startAt": 1.5, "speed": 1.0, "offset": -0.04 }
-}
+Format
+---
 
-// server -> client
-{
-  "protocolVersion": 3,
-  "responseType": "Event",
-  "responseData": { "eventType": "PlayStarted", "summary": { "state": "Playing", "errMsg": "", "timeline": 0 } }
-}
-```
+The format is dictated by the order of fields in the packet structs defined in MajProtocol.Standard.
 
-## Message (v2)
+Fields are written from top-down, sequentially into the packet.
 
-所有 payload 都以原始 JSON 的形式放在 envelope 的 `requestData` / `responseData`
-字段中。下表对应 `Types/Request/RequestType.cs`
-和 `Types/Response/ResponseType.cs`。
+For unmanaged types, they're written to the packet as-is.
 
-**实际上，用户可在双端约定自己的一套payload，避免局限性。**
+For strings, the string length is written first as a 32-bit integer, then the string is written in UTF-8 encoding.
 
-### 请求（客户端 → 服务端）
+Other managed types are not supported.
 
-| 类型       | 编码 | 负载             | 说明                                                                                |
-|----------|-----:|-----------------|----------------------------------------------------------------------------------|
-| `Reset`  | 0    | —               | 将服务端重置为初始空闲状态。                                    |
-| `Load`   | 1    | `LoadRequest`   | 加载曲目及可选的封面 / 视频资源（`trackPath`、`imagePath`、`videoPath`）。        |
-| `Parse`  | 2    | `ParseRequest`  | 解析 simai 铺面，并应用曲目元数据。                              |
-| `Play`   | 3    | `PlayRequest`   | 开始播放。提供播放参数。                                  |
-| `Pause`  | 4    | —               | 暂停正在进行的播放。                                              |
-| `Resume` | 5    | —               | 继续播放先前暂停的内容。                                                            |
-| `Stop`   | 6    | —               | 停止播放并将服务端恢复到非播放状态。                                                  |
-| `State`  | 7    | —               | 查询当前服务端状态。                                              |
-| `Setting`| 8    | —               | 修改服务端设置。                                                            |
+Establishing a Connection
+---
 
-| 负载类型 | 包含字段 | 说明 |
-|-----|-----|------|
-| `LoadRequest` | TrackPath, ImagePath, VideoPath | 从指定路径加载大的资源（`null` 字段会被忽略）。 |
-| `ParseRequest` | SimaiFumen, ClockCount, Offset, <br /> Title, Artist, Level, Designer, Difficulty | Player 解析 simai 文本、时钟数、全局偏移、曲目元数据。 |
-| `PlayRequest` | PlayMode, StartAt, Speed, MaidataPath | 播放已解析的曲目。一般地，需先通过 `Parse` 处理后再发 `Play`。 |
+This project assumes there is **only one connection** established by the server.
 
-### 响应（服务端 → 客户端）
+The client is an editor or any program that is able to control the playback status of the server (E.g. MajdataEdit).
 
-| 类型       | 编码 | 负载             | 说明                                                                  |
-|----------|-----:|-----------------|----------------------------------------------------------------------|
-| `Error`  | 0    | —               | 上一个请求无法处理。具体错误在ViewSummary.ErrMsg。                                       |
-| `Ok`     | 1    | —               | 通用确认应答，用于所有成功处理的请求（无状态变化、或请求方不关心子状态时）。             |
-| `Event`  | 2    | `EventResponse` | 服务端主动推送的语义事件：LoadOk / PlayStarted / PlayPaused / PlayResumed / PlayStopped / Heartbeat。取代旧版把子状态硬塞进 ResponseType 的冗余枚举。 |
+The server is a player that receives control packets from the client and plays back the data for viewing (E.g.
+MajdataView or AstroDX).
 
-| 负载类型 | 包含字段 | 说明 |
-|-----|-----|------|
-| `EventResponse` | EventType, Summary? | EventType 表示事件类型；Summary 是当前 ViewSummary（可选）。 |
+After the connection is made through your preferred communication method, the client **MUST** send a `HandshakeRequest`
+packet.
+
+The `protocolVersion` delivered through this packet must match that on the server.
+
+The server **MUST** respond with a `HandshakeResponse`, where `accepted` is `true` if the `protocolVersion` of the
+client matches that on the server, otherwise a `false` is sent, and the server **MUST** terminate the connection.
+
+Sending and Receiving Data
+---
+
+The client **SHOULD** send a `LoadRequest` to the server to load basic information regarding the song.
+If any of the fields can't be supplied, fill the fields with `string.Empty`.
+
+The server **MUST** respond with a `LoadResponse` where `accepted` is `true` if the files are loaded
+successfully.
+
+The client **MUST** send a `ParseRequest` to the server to load the chart before playback. The content of this request
+is the full body of a single difficulty (i.e. content of an inote property in the maidata.txt file).
+
+The server **MUST** respond with a `ParseResponse` where `accepted` is `true` if the chart has been properly loaded.
+
+Playback
+---
+
+When the client wants to start playback, it **MUST** send a `PlayRequest` to the server, containing the playback
+position.
+
+The server **MUST** respond with a `PlayResponse` where `accepted` is `true` if playback is able to begin.
+
+When the client wants to pause playback , it **MUST** send a `PauseRequest` to the server.
+
+The server **MUST** respond with a `PauseResponse` where `accepted` is `true` if playback is able to pause.
+
+If the client wants to unload the chart and relevant data provided through the `LoadRequest` and the `ParseRequest`, it
+**SHOULD** send an `UnloadRequest`.
+
+The server **MUST** respond with an `UnloadResponse`, where `accepted` is true if the server can successfully unload.
+
+Closing the Connection
+---
+
+Connection termination **SHOULD** begin with the client. Termination should be handled by the framework of the client,
+for example a WebSocket.
+
+The server **SHOULD** dispose data served to it during the connection, for example, chart data. This may be similar to
+an `UnloadRequest`.
