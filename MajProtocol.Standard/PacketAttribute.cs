@@ -2,7 +2,5 @@ using System;
 
 namespace MajProtocol.Standard;
 
-public sealed class PacketAttribute(OpCode opCode) : Attribute
-{
-    public OpCode OpCode { get; } = opCode;
-}
+#pragma warning disable CS9113 // Parameter is unread.
+public sealed class PacketAttribute(OpCode opCode, bool server) : Attribute;

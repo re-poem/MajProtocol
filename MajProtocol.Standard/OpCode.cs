@@ -35,5 +35,11 @@ public enum OpCode : byte
     /// Server stops chart playback.
     /// </para>
     /// </summary>
-    Pause = 4
+    Pause = 4,
+
+    Options = 5,
+
+    State = 6,
+
+    Unload = 7
 }
