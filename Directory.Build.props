@@ -1,0 +1,57 @@
+<Project>
+
+	<!--
+        Central package metadata for the three shipped packages:
+          - MajProtocol.Standard
+          - MajProtocol.Client.WebSocketSharp
+          - MajProtocol.Server.WebSocketSharp
+    -->
+
+	<PropertyGroup>
+		<!-- Release version: bump this to publish a new version. -->
+		<Version>2.0.0</Version>
+
+		<Authors>re-poem, fumiko</Authors>
+		<Company>re-poem</Company>
+
+		<PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+		<PackageProjectUrl>https://github.com/re-poem/MajProtocol</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/re-poem/MajProtocol.git</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<PackageTags>simai;majdata;protocol;websocket;binary-protocol</PackageTags>
+
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+
+		<Deterministic>true</Deterministic>
+		<ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+	</PropertyGroup>
+
+	<!-- Per-project descriptions, kept here so the project files stay untouched. -->
+	<PropertyGroup Condition="'$(MSBuildProjectName)' == 'MajProtocol.Standard'">
+		<Description>Packet types and property constants for the MajProtocol binary protocol. Ships the packet serialization source generator as an analyzer.</Description>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(MSBuildProjectName)' == 'MajProtocol.Client.WebSocketSharp'">
+		<Description>WebSocket client implementation of MajProtocol, used by an editor to drive the playback state of a player.</Description>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(MSBuildProjectName)' == 'MajProtocol.Server.WebSocketSharp'">
+		<Description>WebSocket server implementation of MajProtocol, used by a player to receive playback control from a client.</Description>
+	</PropertyGroup>
+
+	<!-- The source generator is a build-time dependency only: it is embedded into
+         MajProtocol.Standard and must not produce its own package. -->
+	<PropertyGroup Condition="'$(MSBuildProjectName)' == 'MajProtocol.Standard.Generator'">
+		<IsPackable>false</IsPackable>
+	</PropertyGroup>
+
+	<!-- Ship the repository README inside each package. -->
+	<ItemGroup Condition="'$(IsPackable)' != 'false'">
+		<None Include="$(MSBuildThisFileDirectory)README.md"
+              Pack="true"
+              PackagePath="\"
+              Visible="false"/>
+	</ItemGroup>
+
+</Project>
