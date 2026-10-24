@@ -1,3 +1,6 @@
 <Solution>
-  <Project Path="MajProtocol.csproj" />
+  <Project Path="MajProtocol.Client.WebSocketSharp/MajProtocol.Client.WebSocketSharp.csproj" />
+  <Project Path="MajProtocol.Server.WebSocketSharp/MajProtocol.Server.WebSocketSharp.csproj" />
+  <Project Path="MajProtocol.Standard.Generator/MajProtocol.Standard.Generator.csproj" />
+  <Project Path="MajProtocol.Standard/MajProtocol.Standard.csproj" />
 </Solution>
