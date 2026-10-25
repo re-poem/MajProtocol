@@ -9,7 +9,7 @@
 
 	<PropertyGroup>
 		<!-- Release version: bump this to publish a new version. -->
-		<Version>2.0.0</Version>
+		<Version>2.0.1</Version>
 
 		<Authors>re-poem, fumiko</Authors>
 		<Company>re-poem</Company>
