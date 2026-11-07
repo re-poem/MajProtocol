@@ -62,6 +62,10 @@ public class PacketGenerator : IIncrementalGenerator
                                            Name: f.Name,
                                            Type: f.Type.ToDisplayString(),
                                            IsString: f.Type.SpecialType == SpecialType.System_String,
+                                           IsBytes: f.Type is IArrayTypeSymbol
+                                           {
+                                               ElementType.SpecialType: SpecialType.System_Byte
+                                           },
                                            IsUnmanaged: f.Type.IsUnmanagedType
                                        ))
                                .ToImmutableArray();
@@ -104,6 +108,26 @@ public class PacketGenerator : IIncrementalGenerator
                 fieldReads.AppendLine("        remainingSpan = remainingSpan[sizeof(int)..];");
                 fieldReads.AppendLine(
                     $"        packet.{field.Name} = Encoding.UTF8.GetString(remainingSpan[..{field.Name}Len]);");
+                if (i < info.Fields.Length - 1)
+                    fieldReads.AppendLine($"        remainingSpan = remainingSpan[{field.Name}Len..];");
+            }
+            else if (field.IsBytes)
+            {
+                // A null array is encoded as a zero length payload.
+                stringDecls.AppendLine($"        var {field.Name}Bytes = this.{field.Name} ?? Array.Empty<byte>();");
+                stringDecls.AppendLine($"        var {field.Name}BytesLength = {field.Name}Bytes.Length;");
+
+                sizeCalc.Append($" + sizeof(int) + {field.Name}BytesLength");
+
+                fieldWrites.AppendLine($"        MemoryMarshal.Write(remainingSpan, ref {field.Name}BytesLength);");
+                fieldWrites.AppendLine("        remainingSpan = remainingSpan[sizeof(int)..];");
+                fieldWrites.AppendLine($"        {field.Name}Bytes.CopyTo(remainingSpan);");
+                if (i < info.Fields.Length - 1)
+                    fieldWrites.AppendLine($"        remainingSpan = remainingSpan[{field.Name}BytesLength..];");
+
+                fieldReads.AppendLine($"        int {field.Name}Len = MemoryMarshal.Read<int>(remainingSpan);");
+                fieldReads.AppendLine("        remainingSpan = remainingSpan[sizeof(int)..];");
+                fieldReads.AppendLine($"        packet.{field.Name} = remainingSpan[..{field.Name}Len].ToArray();");
                 if (i < info.Fields.Length - 1)
                     fieldReads.AppendLine($"        remainingSpan = remainingSpan[{field.Name}Len..];");
             }
@@ -213,4 +237,4 @@ internal record PacketInfo(
     bool                      IsServer,
     ImmutableArray<FieldInfo> Fields);
 
-internal record FieldInfo(string Name, string Type, bool IsString, bool IsUnmanaged);
+internal record FieldInfo(string Name, string Type, bool IsString, bool IsBytes, bool IsUnmanaged);

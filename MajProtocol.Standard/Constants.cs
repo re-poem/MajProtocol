@@ -2,5 +2,5 @@ namespace MajProtocol.Standard;
 
 public static class Properties
 {
-    public const int ProtocolVersion = 100;
+    public const int ProtocolVersion = 3;
 }

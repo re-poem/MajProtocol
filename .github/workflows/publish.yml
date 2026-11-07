@@ -1,0 +1,212 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: publish
+
+# The version lives in Directory.Build.props, which every project file imports,
+# so there is no version to derive from a tag or a release: bump <Version> to
+# release, then run this workflow by hand. nuget.org refuses to overwrite an
+# existing version, so the pushes use --skip-duplicate and re-running a failed
+# run is harmless.
+#
+# Publishing uses nuget.org trusted publishing (OIDC) instead of a stored API
+# key, so there is no long-lived secret to rotate: the deploy job exchanges a
+# short-lived OIDC token for an API key that is valid for one hour.
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Push the packages and their symbols to nuget.org (uncheck to only pack and validate)
+        type: boolean
+        default: true
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: true
+  NUGET_DIRECTORY: ${{ github.workspace }}/nuget
+
+# Nothing here writes to the repository, so read-only is enough.
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  create_nuget:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # Version comes from the project files (Directory.Build.props <Version>),
+      # never from an input, so a run can only ship what is committed.
+      - name: Read version from the project files
+        id: version
+        run: |
+          version="$(dotnet msbuild MajProtocol.Standard/MajProtocol.Standard.csproj -getProperty:Version -nologo)"
+          if [ -z "$version" ]; then
+            echo "::error::could not read <Version> from the project files"
+            exit 1
+          fi
+          echo "packing version $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # MajProtocol.Standard is packed first: the two implementation packages
+      # declare a dependency on it.
+      - name: Pack
+        run: |
+          for project in \
+            MajProtocol.Standard \
+            MajProtocol.Client.WebSocketSharp \
+            MajProtocol.Server.WebSocketSharp
+          do
+            dotnet pack "$project/$project.csproj" \
+              --configuration Release \
+              --output "$NUGET_DIRECTORY" \
+              --nologo
+          done
+
+      # MajProtocol.Standard.Generator is a build-time analyzer whose output is
+      # already compiled into MajProtocol.Standard.dll. Packing it as well would
+      # make consumers generate the same types twice (CS0436).
+      - name: Check what was packed
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          for id in \
+            MajProtocol.Standard \
+            MajProtocol.Client.WebSocketSharp \
+            MajProtocol.Server.WebSocketSharp
+          do
+            for extension in nupkg snupkg; do
+              if [ ! -f "$NUGET_DIRECTORY/$id.$VERSION.$extension" ]; then
+                echo "::error::$id.$VERSION.$extension was not produced"
+                exit 1
+              fi
+            done
+          done
+
+          count="$(find "$NUGET_DIRECTORY" -maxdepth 1 -name '*.nupkg' | wc -l)"
+          if [ "$count" -ne 3 ]; then
+            echo "::error::expected exactly 3 packages, found $count"
+            ls -l "$NUGET_DIRECTORY"
+            exit 1
+          fi
+
+      # Hand the packages to the following jobs through the artifact.
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            ${{ env.NUGET_DIRECTORY }}/*.nupkg
+            ${{ env.NUGET_DIRECTORY }}/*.snupkg
+
+  validate_nuget:
+    runs-on: ubuntu-latest
+    needs: [create_nuget]
+    steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget
+          path: ${{ env.NUGET_DIRECTORY }}
+
+      - name: Install package validator
+        run: dotnet tool update Meziantou.Framework.NuGetPackageValidation.Tool --global
+
+      # Validates the metadata and content of the packages.
+      # https://www.nuget.org/packages/Meziantou.Framework.NuGetPackageValidation.Tool
+      # Disable inapplicable rules with --excluded-rules / --excluded-rule-ids.
+      - name: Validate packages
+        run: meziantou.validate-nuget-package "$NUGET_DIRECTORY"/*.nupkg
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # There is no test project in the solution yet; this at least proves the
+      # committed sources build in Release. Swap in `dotnet test` once one exists.
+      - name: Build
+        run: dotnet build MajProtocol.slnx --configuration Release
+
+  deploy:
+    # Only from the default branch: the trusted publishing policy is bound to
+    # the repository and this workflow file, not to a branch.
+    if: inputs.publish == true && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    needs: [create_nuget, validate_nuget, build]
+    permissions:
+      contents: read
+      id-token: write # lets the job request the GitHub OIDC token
+    steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget
+          path: ${{ env.NUGET_DIRECTORY }}
+
+      # Trusted publishing: exchange the OIDC token for an API key that nuget.org
+      # issues for this repository and workflow file only. The key lives one
+      # hour and each token can be exchanged once, so log in right before
+      # pushing.
+      - name: NuGet login (OIDC → short-lived API key)
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: RE_Poem
+
+      # Publish order matters: nuget.org validates the dependencies of a pushed
+      # package, so MajProtocol.Standard has to be there first. The symbols
+      # package is pushed right after its package.
+      # --skip-duplicate keeps a re-run from failing on versions that are
+      # already published.
+      - name: Push to nuget.org
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+          VERSION: ${{ needs.create_nuget.outputs.version }}
+        run: |
+          for id in \
+            MajProtocol.Standard \
+            MajProtocol.Client.WebSocketSharp \
+            MajProtocol.Server.WebSocketSharp
+          do
+            for extension in nupkg snupkg; do
+              file="$NUGET_DIRECTORY/$id.$VERSION.$extension"
+              echo "pushing $(basename "$file")"
+              dotnet nuget push "$file" \
+                --api-key "$NUGET_API_KEY" \
+                --source https://api.nuget.org/v3/index.json \
+                --skip-duplicate
+            done
+          done

@@ -23,6 +23,13 @@
 
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 
+		<!-- Ship the XML documentation, and a symbols package so consumers can
+             step through the package source. -->
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<NoWarn>$(NoWarn);CS1591</NoWarn>
+		<IncludeSymbols>true</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
 		<Deterministic>true</Deterministic>
 		<ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
 	</PropertyGroup>
@@ -46,9 +53,23 @@
 		<IsPackable>false</IsPackable>
 	</PropertyGroup>
 
-	<!-- Ship the repository README inside each package. -->
+	<!-- .NET SDK package validation: the pack step fails on packaging mistakes
+         (and on API breaks against the baseline, once one is set) instead of
+         letting nuget.org be the first to know. -->
+	<PropertyGroup Condition="'$(IsPackable)' != 'false'">
+		<EnablePackageValidation>true</EnablePackageValidation>
+
+		<!-- Optional: detect breaking API changes against a published version. -->
+		<!-- <PackageValidationBaselineVersion>2.0.1</PackageValidationBaselineVersion> -->
+	</PropertyGroup>
+
+	<!-- Ship the repository README and icon inside each package. -->
 	<ItemGroup Condition="'$(IsPackable)' != 'false'">
 		<None Include="$(MSBuildThisFileDirectory)README.md"
+              Pack="true"
+              PackagePath="\"
+              Visible="false"/>
+		<None Include="$(MSBuildThisFileDirectory)icon.png"
               Pack="true"
               PackagePath="\"
               Visible="false"/>

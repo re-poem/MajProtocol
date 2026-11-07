@@ -20,6 +20,9 @@ For unmanaged types, they're written to the packet as-is.
 
 For strings, the string length is written first as a 32-bit integer, then the string is written in UTF-8 encoding.
 
+For byte arrays, the array length is written first as a 32-bit integer, then the bytes are written as-is. A `null` array
+is written as a length of `0`.
+
 Other managed types are not supported.
 
 Establishing a Connection
@@ -43,16 +46,17 @@ client matches that on the server, otherwise a `false` is sent, and the server *
 Sending and Receiving Data
 ---
 
-The client **SHOULD** send a `LoadRequest` to the server to load basic information regarding the song.
-If any of the fields can't be supplied, fill the fields with `string.Empty`.
+The client **SHOULD** send a `FilesRequest` to the server to transfer the files of the song. `track`, `jacket` and
+`movie` carry the raw contents of the respective files. If any of the files can't be supplied, leave the field as
+`null`.
 
-The server **MUST** respond with a `LoadResponse` where `accepted` is `true` if the files are loaded
+The server **MUST** respond with a `FilesResponse` where `accepted` is `true` if the files are loaded
 successfully.
 
-The client **MUST** send a `ParseRequest` to the server to load the chart before playback. The content of this request
+The client **MUST** send a `SimaiRequest` to the server to load the chart before playback. The content of this request
 is the full body of a single difficulty (i.e. content of an inote property in the maidata.txt file).
 
-The server **MUST** respond with a `ParseResponse` where `accepted` is `true` if the chart has been properly loaded.
+The server **MUST** respond with a `SimaiResponse` where `accepted` is `true` if the chart has been properly loaded.
 
 Playback
 ---
@@ -66,7 +70,7 @@ When the client wants to pause playback , it **MUST** send a `PauseRequest` to t
 
 The server **MUST** respond with a `PauseResponse` where `accepted` is `true` if playback is able to pause.
 
-If the client wants to unload the chart and relevant data provided through the `LoadRequest` and the `ParseRequest`, it
+If the client wants to unload the chart and relevant data provided through the `FilesRequest` and the `SimaiRequest`, it
 **SHOULD** send an `UnloadRequest`.
 
 The server **MUST** respond with an `UnloadResponse`, where `accepted` is true if the server can successfully unload.
