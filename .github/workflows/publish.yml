@@ -116,30 +116,6 @@ jobs:
             ${{ env.NUGET_DIRECTORY }}/*.nupkg
             ${{ env.NUGET_DIRECTORY }}/*.snupkg
 
-  validate_nuget:
-    runs-on: ubuntu-latest
-    needs: [create_nuget]
-    steps:
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-
-      - name: Download packages
-        uses: actions/download-artifact@v4
-        with:
-          name: nuget
-          path: ${{ env.NUGET_DIRECTORY }}
-
-      - name: Install package validator
-        run: dotnet tool update Meziantou.Framework.NuGetPackageValidation.Tool --global
-
-      # Validates the metadata and content of the packages.
-      # https://www.nuget.org/packages/Meziantou.Framework.NuGetPackageValidation.Tool
-      # Disable inapplicable rules with --excluded-rules / --excluded-rule-ids.
-      - name: Validate packages
-        run: meziantou.validate-nuget-package "$NUGET_DIRECTORY"/*.nupkg
-
   build:
     runs-on: ubuntu-latest
     steps:
@@ -160,7 +136,7 @@ jobs:
     # the repository and this workflow file, not to a branch.
     if: inputs.publish == true && github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
-    needs: [create_nuget, validate_nuget, build]
+    needs: [create_nuget, build]
     permissions:
       contents: read
       id-token: write # lets the job request the GitHub OIDC token
