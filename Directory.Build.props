@@ -63,13 +63,9 @@
 		<!-- <PackageValidationBaselineVersion>2.0.1</PackageValidationBaselineVersion> -->
 	</PropertyGroup>
 
-	<!-- Ship the repository README and icon inside each package. -->
+	<!-- Ship the repository README inside each package. -->
 	<ItemGroup Condition="'$(IsPackable)' != 'false'">
 		<None Include="$(MSBuildThisFileDirectory)README.md"
-              Pack="true"
-              PackagePath="\"
-              Visible="false"/>
-		<None Include="$(MSBuildThisFileDirectory)icon.png"
               Pack="true"
               PackagePath="\"
               Visible="false"/>

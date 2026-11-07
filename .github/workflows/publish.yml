@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Push the packages and their symbols to nuget.org (uncheck to only pack and validate)
+        description: Push the packages to nuget.org
         type: boolean
         default: true
 
